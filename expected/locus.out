@@ -1,0 +1,471 @@
+--
+--  Test locus datatype
+--
+CREATE EXTENSION locus;
+-- Check whether any of our opclasses fail amvalidate
+SELECT amname, opcname
+FROM pg_opclass opc LEFT JOIN pg_am am ON am.oid = opcmethod
+WHERE opc.oid >= 16384 AND NOT amvalidate(opc.oid);
+ amname | opcname 
+--------+---------
+(0 rows)
+
+--
+-- testing input and output functions
+--
+-- Single position
+SELECT '1:7980977'::locus AS locus;
+   locus   
+-----------
+ 1:7980977
+(1 row)
+
+SELECT 'chr1:7980977'::locus AS locus;
+    locus     
+--------------
+ chr1:7980977
+(1 row)
+
+-- Interval
+SELECT 'X:66765034-66765260'::locus AS locus;
+        locus        
+---------------------
+ X:66765034-66765260
+(1 row)
+
+-- invalid input
+SELECT 'X:66765260-66765034'::locus AS locus;
+ERROR:  (6) start position in genomic locus "X:66765260-66765034" is greater than end position (66765260 > 66765034)
+LINE 1: SELECT 'X:66765260-66765034'::locus AS locus;
+               ^
+SELECT '66765260-66765034'::locus AS locus;
+ERROR:  (2) invalid input syntax for genomic locus "66765260-66765034"; expecting ':' followed by an integer
+LINE 1: SELECT '66765260-66765034'::locus AS locus;
+               ^
+SELECT '66765034'::locus AS locus;
+ERROR:  (2) invalid input syntax for genomic locus "66765034"; expecting ':' followed by an integer
+LINE 1: SELECT '66765034'::locus AS locus;
+               ^
+SELECT 'chr1:a7980977-7980978'::locus AS locus;
+ERROR:  (3) invalid input syntax for genomic locus "chr1:a7980977-7980978"; expecting ':' followed by an integer
+LINE 1: SELECT 'chr1:a7980977-7980978'::locus AS locus;
+               ^
+SELECT 'chr1:7980977-a7980978'::locus AS locus;
+ERROR:  (5) invalid input syntax for genomic locus "chr1:7980977-a7980978"; expecting an integer after '-'
+LINE 1: SELECT 'chr1:7980977-a7980978'::locus AS locus;
+               ^
+SELECT 'chr1:7980977a7980978'::locus AS locus;
+    locus     
+--------------
+ chr1:7980977
+(1 row)
+
+SELECT 'chr1:7980977-798a0978'::locus AS locus;
+ERROR:  (6) start position in genomic locus "chr1:7980977-798a0978" is greater than end position (7980977 > 798)
+LINE 1: SELECT 'chr1:7980977-798a0978'::locus AS locus;
+               ^
+--
+-- testing the  operators
+--
+-- equality/inequality:
+--
+SELECT '5:170827137-170827174'::locus = '5:170827137-170827174'::locus AS bool;
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:170827137-170827174'::locus = '5:170827137-170827175'::locus AS bool;
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:170827137-170827174'::locus != '5:170827137-170827174'::locus AS bool;
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:170827137-170827174'::locus != '5:170827137-170827175'::locus AS bool;
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:170827137'::locus = '5:170827137-170827137'::locus AS bool;
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:170827137'::locus != '5:170827137-170827137'::locus AS bool;
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:170827137'::locus != '5:170827137-170827174'::locus AS bool;
+ bool 
+------
+ t
+(1 row)
+
+-- overlap
+--
+SELECT '1:45329242-45340925'::locus && '1:45339670-45343975'::locus AS bool; -- MUTYH, TOE1 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '1:45343883-45491166'::locus && '1:45339670-45343975'::locus AS bool; -- TESK2, TOE1 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '1:45343883-45491166'::locus && '1:45344840-45345558'::locus AS bool; -- TESK2, TESK2 exon 2 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '1:45343883-45491166'::locus && '1:45344840'::locus AS bool; -- TESK2, TESK2 exon 2 start (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '1:45329242-45340925'::locus && '1:45343883-45491166'::locus AS bool; -- MUTYH, TESK2 (f)
+ bool 
+------
+ f
+(1 row)
+
+-- ** in the following tests, "TERT promoter" is a reagion between -1000 and -500 bp from translation start
+-- overlap on the left
+--
+SELECT '1:45329242-45340925'::locus &< '1:45339670-45343975'::locus AS bool; -- MUTYH, TOE1 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1252147-1252647'::locus &< '5:1253147-1295069'::locus AS bool; -- TERT promoter, TERT (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus &< '5:1252147-1252647'::locus AS bool; -- TERT, TERT promoter (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus &< '5:1253023'::locus AS bool; -- TERT, TERT promoter locus (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus &< '5:1253147-1295069'::locus AS bool; -- self (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147'::locus &< '5:1253147'::locus AS bool; -- self (t)
+ bool 
+------
+ t
+(1 row)
+
+-- overlap on the right
+--
+SELECT '1:45343883-45491166'::locus &> '1:45339670-45343975'::locus AS bool; -- TESK2, TOE1 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147-1295069'::locus &> '5:1252147-1252647'::locus AS bool; -- TERT, TERT promoter (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus &> '5:1253023'::locus AS bool; -- TERT, TERT promoter locus (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus &> '5:1253147-1295069'::locus AS bool; -- self (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147'::locus &> '5:1253147'::locus AS bool; -- self (t)
+ bool 
+------
+ t
+(1 row)
+
+-- left
+--
+SELECT '1:45329242-45340925'::locus << '1:45339670-45343975'::locus AS bool; -- MUTYH, TOE1 (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '1:45329242-45340925'::locus << '1:45343883-45491166'::locus AS bool; -- MUTYH, TESK2 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1252147-1252647'::locus << '5:1253147-1295069'::locus AS bool; -- TERT promoter, TERT (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147-1295069'::locus << '5:1252147-1252647'::locus AS bool; -- TERT, TERT promoter (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus << '5:1253023'::locus AS bool; -- TERT, TERT promoter locus (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus << '5:1253147-1295069'::locus AS bool; -- self (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147'::locus << '5:1253147'::locus AS bool; -- self (f)
+ bool 
+------
+ f
+(1 row)
+
+-- right
+--
+SELECT '1:45329242-45340925'::locus >> '1:45339670-45343975'::locus AS bool; -- MUTYH, TOE1 (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '1:45329242-45340925'::locus >> '1:45343883-45491166'::locus AS bool; -- MUTYH, TESK2 (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '1:45343883-45491166'::locus >> '1:45329242-45340925'::locus AS bool; -- TESK2, MUTYH, TESK2 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1252147-1252647'::locus >> '5:1253147-1295069'::locus AS bool; -- TERT promoter, TERT (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus >> '5:1252147-1252647'::locus AS bool; -- TERT, TERT promoter (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147-1295069'::locus >> '5:1253023'::locus AS bool; -- TERT, TERT promoter locus (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147-1295069'::locus >> '5:1253147-1295069'::locus AS bool; -- self (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147'::locus >> '5:1253147'::locus AS bool; -- self (f)
+ bool 
+------
+ f
+(1 row)
+
+-- "contained in" (the left value fits within the interval specified in the right value):
+--
+SELECT '1:45329242-45340925'::locus <@ '1:45339670-45343975'::locus AS bool; -- MUTYH, TOE1 (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '1:45343883-45491166'::locus <@ '1:45339670-45343975'::locus AS bool; -- TESK2, TOE1 (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '1:45343883-45491166'::locus <@ '1:45344840-45345558'::locus AS bool; -- TESK2, TESK2 exon 2 (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '1:45344840-45345558'::locus <@ '1:45343883-45491166'::locus AS bool; -- TESK2 exon 2, TESK2 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '1:45343883-45491166'::locus <@ '1:45344840'::locus AS bool; -- TESK2, TESK2 exon 2 start (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '1:45344840'::locus <@ '1:45343883-45491166'::locus AS bool; -- TESK2 exon 2 start, TESK2 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147-1295069'::locus <@ '5:1253147-1295069'::locus AS bool; -- self (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147'::locus <@ '5:1253147'::locus AS bool; -- self (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147'::locus <@ '5:1253147-1295069'::locus AS bool; -- self boundary (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1295069'::locus <@ '5:1253147-1295069'::locus AS bool; -- self boundary (t)
+ bool 
+------
+ t
+(1 row)
+
+-- "contains" (the left value contains the interval specified in the right value):
+--
+SELECT '1:45343883-45491166'::locus @> '1:45344840-45345558'::locus AS bool; -- TESK2, TESK2 exon 2 (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '1:45344840-45345558'::locus @> '1:45343883-45491166'::locus AS bool; -- TESK2 exon 2, TESK2 (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '1:45343883-45491166'::locus @> '1:45344840'::locus AS bool; -- TESK2, TESK2 exon 2 start (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '1:45344840'::locus @> '1:45343883-45491166'::locus AS bool; -- TESK2 exon 2 start, TESK2 (f)
+ bool 
+------
+ f
+(1 row)
+
+SELECT '5:1253147-1295069'::locus @> '5:1253147-1295069'::locus AS bool; -- self (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147'::locus @> '5:1253147'::locus AS bool; -- self (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147-1295069'::locus @> '5:1253147'::locus AS bool; -- self boundary (t)
+ bool 
+------
+ t
+(1 row)
+
+SELECT '5:1253147-1295069'::locus @> '5:1295069'::locus AS bool; -- self boundary (t)
+ bool 
+------
+ t
+(1 row)
+
+-- Load some example data and build the index
+--
+CREATE TABLE test_locus (
+  pos locus,
+  ref text,
+  alt text,
+  id text
+);
+\copy test_locus from data/oncomine.hotspot.tab
+-- CREATE INDEX test_locus_ix ON test_locus USING gist (pos);
+SELECT count(*) FROM test_locus WHERE pos <@ 'chr3:138665254-178920634';
+ count 
+-------
+   300
+(1 row)
+
+-- Test sorting
+SELECT pos, count(*) FROM test_locus WHERE pos <@ 'chr3:178916934-178917409' GROUP BY pos;
+           pos            | count 
+--------------------------+-------
+ chr3:178916934-178916935 |     1
+ chr3:178916935-178916936 |     3
+ chr3:178916937-178916940 |     1
+ chr3:178916939-178916948 |     1
+ chr3:178916940-178916941 |     1
+ chr3:178916943-178916944 |     1
+ chr3:178916943-178916946 |     1
+ chr3:178916943-178916952 |     1
+ chr3:178916944-178916945 |     1
+ chr3:178916945-178916946 |     2
+ chr3:178916945-178916948 |     1
+ chr3:178916956-178916957 |     2
+ chr3:178917406-178917407 |     1
+ chr3:178917407-178917408 |     1
+ chr3:178917408-178917409 |     1
+(15 rows)
+
+-- Test functions
+SELECT pos, locus_start(pos), locus_center(pos), locus_end(pos) FROM test_locus WHERE length(ref) > 1 limit 6;
+          pos           |  locus_start  |      locus_center      |   locus_end   
+------------------------+---------------+------------------------+---------------
+ chr1:43815006-43815009 | chr1:43815006 | chr1:43815007-43815008 | chr1:43815009
+ chr1:43815007-43815009 | chr1:43815007 | chr1:43815008          | chr1:43815009
+ chr1:43815007-43815009 | chr1:43815007 | chr1:43815008          | chr1:43815009
+ chr1:43815007-43815010 | chr1:43815007 | chr1:43815008-43815009 | chr1:43815010
+ chr2:25463297-25463300 | chr2:25463297 | chr2:25463298-25463299 | chr2:25463300
+ chr3:10183754-10183757 | chr3:10183754 | chr3:10183755-10183756 | chr3:10183757
+(6 rows)
+

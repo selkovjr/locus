@@ -1,0 +1,5 @@
+# locus extension
+comment = 'data type representing genomic locus (X:66765034, chrX:66765034-66765260)'
+default_version = '1.0'
+module_pathname = '$libdir/locus'
+relocatable = true
