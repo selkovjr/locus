@@ -30,7 +30,7 @@ int locus_yydebug = 1;
 
 extern int locus_yylex(void);
 
-extern int	locus_yyparse(LOCUS *result);
+extern int  locus_yyparse(LOCUS *result);
 extern void locus_yyerror(LOCUS *result, const char *message);
 
 void remove_commas(char *);
