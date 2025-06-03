@@ -2,25 +2,29 @@
  * contrib/locus/locus.c
  *
  ******************************************************************************
-  This file contains routines that can be bound to a Postgres backend and
-  called by the backend in the process of processing queries.  The calling
-  format for these routines is dictated by Postgres architecture.
-******************************************************************************/
+ This file contains routines that can be bound to a Postgres backend and called
+ by the backend while processing queries.  The calling format for these
+ routines is dictated by Postgres architecture.
+ ******************************************************************************/
+
+
+#include <float.h>
+#include <limits.h>  /* for INT_MAX */
 
 #include "postgres.h"
-
-#include <string.h>
-#include <math.h>
-
 #include "access/gist.h"
 #include "access/stratnum.h"
+#include "utils/builtins.h"
+#include "utils/typcache.h"
+#include "utils/rangetypes.h"
 #include "fmgr.h"
 
-#include "locusdata.h"
+#include "locus_data.h"
 #include "strnatcmp.h"
 
-#define DatumGetSegP(X) ((LOCUS *) DatumGetPointer(X))
-#define PG_GETARG_LOCUS_P(n) DatumGetSegP(PG_GETARG_POINTER(n))
+
+#define DatumGetLocusP(X) ((LOCUS *) DatumGetPointer(X))
+#define PG_GETARG_LOCUS_P(n) DatumGetLocusP(PG_GETARG_POINTER(n))
 
 
 /*
@@ -35,43 +39,45 @@ PG_MODULE_MAGIC;
  */
 typedef struct
 {
-  float        center;
+  float   center;
   OffsetNumber index;
-  LOCUS        *data;
-} glocus_picksplit_item;
+  LOCUS      *data;
+} gist_locus_picksplit_item;
 
 /*
 ** Input/Output routines
 */
 PG_FUNCTION_INFO_V1(locus_in);
 PG_FUNCTION_INFO_V1(locus_out);
-PG_FUNCTION_INFO_V1(locus_size);
-PG_FUNCTION_INFO_V1(locus_start);
-PG_FUNCTION_INFO_V1(locus_start_pos);
-PG_FUNCTION_INFO_V1(locus_end);
-PG_FUNCTION_INFO_V1(locus_end_pos);
-PG_FUNCTION_INFO_V1(locus_center);
+PG_FUNCTION_INFO_V1(contig);
+PG_FUNCTION_INFO_V1(range);
+PG_FUNCTION_INFO_V1(length);
+PG_FUNCTION_INFO_V1(lower);
+PG_FUNCTION_INFO_V1(upper);
+PG_FUNCTION_INFO_V1(center);
 
 /*
 ** GiST support methods
 */
-PG_FUNCTION_INFO_V1(glocus_consistent);
-PG_FUNCTION_INFO_V1(glocus_compress);
-PG_FUNCTION_INFO_V1(glocus_decompress);
-PG_FUNCTION_INFO_V1(glocus_picksplit);
-PG_FUNCTION_INFO_V1(glocus_penalty);
-PG_FUNCTION_INFO_V1(glocus_union);
-PG_FUNCTION_INFO_V1(glocus_same);
-static Datum glocus_leaf_consistent(Datum key, Datum query, StrategyNumber strategy);
-static Datum glocus_internal_consistent(Datum key, Datum query, StrategyNumber strategy);
-static Datum glocus_binary_union(Datum r1, Datum r2, int *sizep);
+PG_FUNCTION_INFO_V1(gist_locus_consistent);
+PG_FUNCTION_INFO_V1(gist_locus_compress);
+PG_FUNCTION_INFO_V1(gist_locus_decompress);
+PG_FUNCTION_INFO_V1(gist_locus_picksplit);
+PG_FUNCTION_INFO_V1(gist_locus_penalty);
+PG_FUNCTION_INFO_V1(gist_locus_union);
+PG_FUNCTION_INFO_V1(gist_locus_same);
 
+static Datum gist_locus_leaf_consistent(Datum key, Datum query, StrategyNumber strategy);
+static Datum gist_locus_internal_consistent(Datum key, Datum query, StrategyNumber strategy);
+static Datum gist_locus_binary_union(Datum r1, Datum r2, int *sizep);
 
 /*
 ** R-tree support functions
+**
+** The R-tree access method is no longer available but its functions
+** are used to embody the GiST abstraction.
 */
 PG_FUNCTION_INFO_V1(locus_same);
-PG_FUNCTION_INFO_V1(locus_coord_cmp);
 PG_FUNCTION_INFO_V1(locus_contains);
 PG_FUNCTION_INFO_V1(locus_contained);
 PG_FUNCTION_INFO_V1(locus_overlap);
@@ -82,7 +88,6 @@ PG_FUNCTION_INFO_V1(locus_over_right);
 PG_FUNCTION_INFO_V1(locus_union);
 PG_FUNCTION_INFO_V1(locus_inter);
 static void rt_locus_size(LOCUS *a, float *size);
-
 /*
 ** Various operators
 */
@@ -101,180 +106,118 @@ PG_FUNCTION_INFO_V1(locus_different);
 Datum
 locus_in(PG_FUNCTION_ARGS)
 {
-  char   *str = PG_GETARG_CSTRING(0);
-  char   *str_copy = pstrdup(str);
-  LOCUS  *result = palloc(sizeof(LOCUS));
-  char   *contig;
-  char   *start_pos, *end_pos, *dash_ptr;
-  int32  start, end;
-  int    size, n;
+  char     *str = PG_GETARG_CSTRING(0);
+  LOCUS    *result = palloc(sizeof(LOCUS));
 
-  contig = strtok(str_copy, ":");
-  if (!contig) {
-    ereport (
-      ERROR,
-      (errcode(ERRCODE_SYNTAX_ERROR),
-       errmsg("(1) invalid input syntax for genomic locus \"%s\"; expecting contig name followed by a ':'", str))
-    );
-  }
+  locus_scanner_init(str);
 
-  start_pos = strtok(NULL, "-");
-  if (!start_pos) {
-    ereport (
-      ERROR,
-      (errcode(ERRCODE_SYNTAX_ERROR),
-       errmsg("(2) invalid input syntax for genomic locus \"%s\"; expecting ':' followed by an integer", str))
-    );
-  }
-  n = sscanf(start_pos, "%d", &start);
-  if (n == 0) {
-    ereport (
-      ERROR,
-      (errcode(ERRCODE_SYNTAX_ERROR),
-       errmsg("(3) invalid input syntax for genomic locus \"%s\"; expecting ':' followed by an integer", str))
-    );
-  }
+  if (locus_yyparse(result) != 0)
+    locus_yyerror(result, "bogus input");
 
-  dash_ptr = strchr(str, '-');
-  if (dash_ptr == NULL) { // we're done
-    end = start;
-  }
-  else {
-    end_pos = strtok(NULL, "-");
-    if (!end_pos) {
-      ereport (
-        ERROR,
-        (errcode(ERRCODE_SYNTAX_ERROR),
-         errmsg("(4) invalid input syntax for genomic locus \"%s\"; expecting an integer", str))
-      );
-    }
-    n = sscanf(end_pos, "%d", &end);
-    if (n == 0) {
-      ereport (
-        ERROR,
-        (errcode(ERRCODE_SYNTAX_ERROR),
-         errmsg("(5) invalid input syntax for genomic locus \"%s\"; expecting an integer after '-'", str))
-      );
-    }
-
-    if (end < start) {
-      ereport (
-        ERROR,
-        (errcode(ERRCODE_SYNTAX_ERROR),
-         errmsg("(6) start position in genomic locus \"%s\" is greater than end position (%d > %d)", str, start, end))
-      );
-    }
-  }
-
-
-  // Write the data into the new LOCUS object
-  size = LOCUS_SIZE(contig);
-  result = (LOCUS *) palloc0(size);
-  SET_VARSIZE(result, size);
-  for (n = 0; n < sizeof(contig); n++) {
-    result->contig[n] = contig[n];
-  }
-  result->start = start;
-  result->end = end;
+  locus_scanner_finish();
 
   PG_RETURN_POINTER(result);
 }
 
+// ------------------------- locus_out ---------------------------
 Datum
 locus_out(PG_FUNCTION_ARGS)
 {
-  LOCUS *locus = PG_GETARG_LOCUS_P(0);
-  char  *result;
+  LOCUS    *locus = PG_GETARG_LOCUS_P(0);
+  char     *result;
 
-  result = (char *) palloc(100);
+  result = (char *) palloc(40);   // max 14 chars of contig + two delimiters + max 20 digits
 
-  if (locus->start == locus->end )
-  {
-    /*
-     * indicates that this interval was built by locus_in off a single point
-     */
-    sprintf(result, "%s:%d", locus->contig, locus->start);
+
+  if (locus == (LOCUS *) NULL) {
+    sprintf(result, "NULL");
   }
-  else
-  {
-    sprintf(result, "%s:%d-%d", locus->contig, locus->start, locus->end);
+  else if (locus->lower == locus->upper) {
+  /*
+   * indicates that this interval was built by locus_in() off a single point
+   */
+    sprintf(result, locus->chr ? "chr%s:%d" : "%s:%d", locus->contig, locus->lower);
+  }
+  else if (locus->lower > 0 && locus->upper == INT_MAX) {
+    sprintf(result, locus->chr ? "chr%s:%d-" : "%s:%d-", locus->contig, locus->lower);
+  }
+  else if (locus->lower == 0 && locus->upper < INT_MAX) {
+    sprintf(result, locus->chr ? "chr%s:-%d" : "%s:-%d", locus->contig, locus->upper);
+  }
+  else if (locus->lower == 0 && locus->upper == INT_MAX) {
+    sprintf(result, locus->chr ? "chr%s" : "%s", locus->contig);
+  }
+  else{
+    sprintf(result, locus->chr ? "chr%s:%d-%d" : "%s:%d-%d", locus->contig, locus->lower, locus->upper);
   }
 
   PG_RETURN_CSTRING(result);
 }
 
+// ------------------------- contig ---------------------------
 Datum
-locus_center(PG_FUNCTION_ARGS)
-{
-  LOCUS  *locus = PG_GETARG_LOCUS_P(0);
-  LOCUS  *new_locus;
-  char   *contig = pstrdup(locus->contig); // need this to determine the length of contig name at runtime
-  int    size;
-  int32  c = (locus->start + locus->end) / 2;
-
-
-  size = LOCUS_SIZE(contig);
-  new_locus = (LOCUS *) palloc0(size);
-  SET_VARSIZE(new_locus, size);
-  strcpy(new_locus->contig, locus->contig);
-
-  new_locus->start = c;;
-  new_locus->end = c;
-  if ((locus->end - locus->start) % 2) {
-    new_locus->end++;
-  }
-
-  PG_RETURN_POINTER(new_locus);
-}
-
-Datum
-locus_start(PG_FUNCTION_ARGS)
-{
-  LOCUS  *locus = PG_GETARG_LOCUS_P(0);
-  char   *contig = pstrdup(locus->contig); // need this to determine the length of contig name at runtime
-  LOCUS  *new_locus;
-  int    size;
-
-  size = LOCUS_SIZE(contig);
-  new_locus = (LOCUS *) palloc0(size);
-  SET_VARSIZE(new_locus, size);
-  strcpy(new_locus->contig, locus->contig);
-  new_locus->start = locus->start;
-  new_locus->end = locus->start;
-
-  PG_RETURN_POINTER(new_locus);
-}
-
-Datum
-locus_start_pos(PG_FUNCTION_ARGS)
+contig(PG_FUNCTION_ARGS)
 {
   LOCUS      *locus = PG_GETARG_LOCUS_P(0);
-  PG_RETURN_INT32(locus->start);
+
+  PG_RETURN_TEXT_P(cstring_to_text(locus->contig));
 }
 
+// ------------------------- range ---------------------------
 Datum
-locus_end(PG_FUNCTION_ARGS)
-{
-  LOCUS  *locus = PG_GETARG_LOCUS_P(0);
-  char   *contig = pstrdup(locus->contig); // need this to determine the length of contig name at runtime
-  LOCUS  *new_locus;
-  int    size;
-
-  size = LOCUS_SIZE(contig);
-  new_locus = (LOCUS *) palloc0(size);
-  SET_VARSIZE(new_locus, size);
-  strcpy(new_locus->contig, locus->contig);
-  new_locus->start = locus->end;
-  new_locus->end = locus->end;
-
-  PG_RETURN_POINTER(new_locus);
-}
-
-Datum
-locus_end_pos(PG_FUNCTION_ARGS)
+range(PG_FUNCTION_ARGS)
 {
   LOCUS      *locus = PG_GETARG_LOCUS_P(0);
-  PG_RETURN_INT32(locus->end);
+
+  // The oid and type data are delived from the int8range return in  CREATE FUNCTION
+  Oid     rngtypid = get_fn_expr_rettype(fcinfo->flinfo);
+  TypeCacheEntry *typcache = range_get_typcache(fcinfo, rngtypid);
+
+  RangeBound  lower;
+  RangeBound  upper;
+
+  // lower.val = locus->lower == 0 ? (Datum) 0 : locus->lower;  /* this will be useful if ever get to define infinite intervals
+  lower.val = locus->lower;
+  // lower.infinite = locus->lower == 0;
+  lower.infinite = false;
+  lower.inclusive = true;
+  lower.lower = true;
+
+  // upper.val = locus->upper == INT_MAX ? (Datum) 0 : locus->upper;
+  upper.val = locus->upper;
+  // upper.infinite = locus->upper == INT_MAX;
+  upper.infinite = false;
+  upper.inclusive = true;
+  upper.lower = false;
+
+  PG_RETURN_RANGE_P(range_serialize(typcache, &lower, &upper, false));
+}
+
+// ------------------------- center ---------------------------
+Datum
+center(PG_FUNCTION_ARGS)
+{
+  LOCUS      *locus = PG_GETARG_LOCUS_P(0);
+
+  PG_RETURN_FLOAT4(((float) locus->lower + (float) locus->upper) / 2.0);
+}
+
+// ------------------------- lower ---------------------------
+Datum
+lower(PG_FUNCTION_ARGS)
+{
+  LOCUS      *locus = PG_GETARG_LOCUS_P(0);
+
+  PG_RETURN_INT32(locus->lower);
+}
+
+// ------------------------- upper ---------------------------
+Datum
+upper(PG_FUNCTION_ARGS)
+{
+  LOCUS      *locus = PG_GETARG_LOCUS_P(0);
+
+  PG_RETURN_INT32(locus->upper);
 }
 
 
@@ -283,46 +226,47 @@ locus_end_pos(PG_FUNCTION_ARGS)
  *****************************************************************************/
 
 /*
-** The GiST Consistent method for loci
+** The GiST Consistent method for genomic loci
 ** Should return false if for all data items x below entry,
-** the predicate x op query == FALSE, where op is the oper
+** the predicate x op query == false, where op is the oper
 ** corresponding to strategy in the pg_amop table.
 */
 Datum
-glocus_consistent(PG_FUNCTION_ARGS)
+gist_locus_consistent(PG_FUNCTION_ARGS)
 {
-  GISTENTRY       *entry = (GISTENTRY *) PG_GETARG_POINTER(0);
-  Datum           query = PG_GETARG_DATUM(1);
-  StrategyNumber  strategy = (StrategyNumber) PG_GETARG_UINT16(2);
+  GISTENTRY  *entry = (GISTENTRY *) PG_GETARG_POINTER(0);
+  Datum   query = PG_GETARG_DATUM(1);
+  StrategyNumber strategy = (StrategyNumber) PG_GETARG_UINT16(2);
 
-  /* Oid  subtype = PG_GETARG_OID(3); */
-  bool            *recheck = (bool *) PG_GETARG_POINTER(4);
+  /* Oid    subtype = PG_GETARG_OID(3); */
+  bool     *recheck = (bool *) PG_GETARG_POINTER(4);
 
   /* All cases served by this function are exact */
   *recheck = false;
 
   /*
-   * if entry is not leaf, use glocus_internal_consistent, else use
-   * glocus_leaf_consistent
+   * if entry is not leaf, use gist_locus_internal_consistent, else use
+   * gist_locus_leaf_consistent
    */
   if (GIST_LEAF(entry))
-    return glocus_leaf_consistent(entry->key, query, strategy);
+    return gist_locus_leaf_consistent(entry->key, query, strategy);
   else
-    return glocus_internal_consistent(entry->key, query, strategy);
+    return gist_locus_internal_consistent(entry->key, query, strategy);
 }
 
 /*
-** The GiST Union method for loci
+** The GiST Union method for genomic loci
 ** returns the minimal bounding locus that encloses all the entries in entryvec
 */
 Datum
-glocus_union(PG_FUNCTION_ARGS)
+gist_locus_union(PG_FUNCTION_ARGS)
 {
   GistEntryVector *entryvec = (GistEntryVector *) PG_GETARG_POINTER(0);
-  int             *sizep = (int *) PG_GETARG_POINTER(1);
-  int             numranges, i;
-  Datum           out = 0;
-  Datum           tmp;
+  int      *sizep = (int *) PG_GETARG_POINTER(1);
+  int     numranges,
+        i;
+  Datum   out = 0;
+  Datum   tmp;
 
 #ifdef GIST_DEBUG
   fprintf(stderr, "union\n");
@@ -334,7 +278,7 @@ glocus_union(PG_FUNCTION_ARGS)
 
   for (i = 1; i < numranges; i++)
   {
-    out = glocus_binary_union(tmp, entryvec->vector[i].key, sizep);
+    out = gist_locus_binary_union(tmp, entryvec->vector[i].key, sizep);
     tmp = out;
   }
 
@@ -342,39 +286,40 @@ glocus_union(PG_FUNCTION_ARGS)
 }
 
 /*
-** GiST Compress and Decompress methods for loci
+** GiST Compress and Decompress methods for genomic loci
 ** do not do anything.
 */
 Datum
-glocus_compress(PG_FUNCTION_ARGS)
+gist_locus_compress(PG_FUNCTION_ARGS)
 {
   PG_RETURN_POINTER(PG_GETARG_POINTER(0));
 }
 
 Datum
-glocus_decompress(PG_FUNCTION_ARGS)
+gist_locus_decompress(PG_FUNCTION_ARGS)
 {
   PG_RETURN_POINTER(PG_GETARG_POINTER(0));
 }
 
 /*
-** The GiST Penalty method for loci
+** The GiST Penalty method for genomic loci
 ** As in the R-tree paper, we use change in area as our penalty metric
 */
 Datum
-glocus_penalty(PG_FUNCTION_ARGS)
+gist_locus_penalty(PG_FUNCTION_ARGS)
 {
   GISTENTRY  *origentry = (GISTENTRY *) PG_GETARG_POINTER(0);
   GISTENTRY  *newentry = (GISTENTRY *) PG_GETARG_POINTER(1);
-  float      *result = (float *) PG_GETARG_POINTER(2);
+  float    *result = (float *) PG_GETARG_POINTER(2);
   LOCUS      *ud;
-  float      tmp1, tmp2;
+  float   tmp1,
+        tmp2;
 
-  ud = DatumGetSegP(
-    DirectFunctionCall2(locus_union, origentry->key, newentry->key)
-  );
+  ud = DatumGetLocusP(DirectFunctionCall2(locus_union,
+                      origentry->key,
+                      newentry->key));
   rt_locus_size(ud, &tmp1);
-  rt_locus_size(DatumGetSegP(origentry->key), &tmp2);
+  rt_locus_size(DatumGetLocusP(origentry->key), &tmp2);
   *result = tmp1 - tmp2;
 
 #ifdef GIST_DEBUG
@@ -386,13 +331,13 @@ glocus_penalty(PG_FUNCTION_ARGS)
 }
 
 /*
- * Comparator function for glocus_picksplit_item: sort by center.
+ * Compare function for gist_locus_picksplit_item: sort by center.
  */
 static int
-glocus_picksplit_item_cmp(const void *a, const void *b)
+gist_locus_picksplit_item_cmp(const void *a, const void *b)
 {
-  const glocus_picksplit_item *i1 = (const glocus_picksplit_item *) a;
-  const glocus_picksplit_item *i2 = (const glocus_picksplit_item *) b;
+  const gist_locus_picksplit_item *i1 = (const gist_locus_picksplit_item *) a;
+  const gist_locus_picksplit_item *i2 = (const gist_locus_picksplit_item *) b;
 
   if (i1->center < i2->center)
     return -1;
@@ -403,23 +348,26 @@ glocus_picksplit_item_cmp(const void *a, const void *b)
 }
 
 /*
- * The GiST PickSplit method for loci
+ * The GiST PickSplit method for genomic loci
  *
  * We used to use Guttman's split algorithm here, but since the data is 1-D
- * it's easier and more robust to just sort the loci by center-point and
+ * it's easier and more robust to just sort the genomic loci by center-point and
  * split at the middle.
  */
 Datum
-glocus_picksplit(PG_FUNCTION_ARGS)
+gist_locus_picksplit(PG_FUNCTION_ARGS)
 {
   GistEntryVector *entryvec = (GistEntryVector *) PG_GETARG_POINTER(0);
-  GIST_SPLITVEC   *v = (GIST_SPLITVEC *) PG_GETARG_POINTER(1);
-  int    i;
-  LOCUS  *locus, *locus_l, *locus_r;
-  glocus_picksplit_item  *sort_items;
-  OffsetNumber           *left, *right;
-  OffsetNumber           maxoff;
-  OffsetNumber           firstright;
+  GIST_SPLITVEC *v = (GIST_SPLITVEC *) PG_GETARG_POINTER(1);
+  int     i;
+  LOCUS      *locus,
+         *locus_l,
+         *locus_r;
+  gist_locus_picksplit_item *sort_items;
+  OffsetNumber *left,
+         *right;
+  OffsetNumber maxoff;
+  OffsetNumber firstright;
 
 #ifdef GIST_DEBUG
   fprintf(stderr, "picksplit\n");
@@ -431,18 +379,18 @@ glocus_picksplit(PG_FUNCTION_ARGS)
   /*
    * Prepare the auxiliary array and sort it.
    */
-  sort_items = (glocus_picksplit_item *)
-    palloc(maxoff * sizeof(glocus_picksplit_item));
+  sort_items = (gist_locus_picksplit_item *)
+    palloc(maxoff * sizeof(gist_locus_picksplit_item));
   for (i = 1; i <= maxoff; i++)
   {
-    locus = DatumGetSegP(entryvec->vector[i].key);
+    locus = DatumGetLocusP(entryvec->vector[i].key);
     /* center calculation is done this way to avoid possible overflow */
-    sort_items[i - 1].center = locus->start * 0.5f + locus->end * 0.5f;
+    sort_items[i - 1].center = locus->lower * 0.5f + locus->upper * 0.5f;
     sort_items[i - 1].index = i;
     sort_items[i - 1].data = locus;
   }
-  qsort(sort_items, maxoff, sizeof(glocus_picksplit_item),
-      glocus_picksplit_item_cmp);
+  qsort(sort_items, maxoff, sizeof(gist_locus_picksplit_item),
+      gist_locus_picksplit_item_cmp);
 
   /* sort items below "firstright" will go into the left side */
   firstright = maxoff / 2;
@@ -455,7 +403,7 @@ glocus_picksplit(PG_FUNCTION_ARGS)
   v->spl_nright = 0;
 
   /*
-   * Emit loci to the left output page, and compute its bounding box.
+   * Emit genomic loci to the left output page, and compute its bounding box.
    */
   locus_l = (LOCUS *) palloc(sizeof(LOCUS));
   memcpy(locus_l, sort_items[0].data, sizeof(LOCUS));
@@ -465,7 +413,7 @@ glocus_picksplit(PG_FUNCTION_ARGS)
   {
     Datum   sortitem = PointerGetDatum(sort_items[i].data);
 
-    locus_l = DatumGetSegP(DirectFunctionCall2(locus_union,
+    locus_l = DatumGetLocusP(DirectFunctionCall2(locus_union,
                          PointerGetDatum(locus_l),
                          sortitem));
     *left++ = sort_items[i].index;
@@ -483,7 +431,7 @@ glocus_picksplit(PG_FUNCTION_ARGS)
   {
     Datum   sortitem = PointerGetDatum(sort_items[i].data);
 
-    locus_r = DatumGetSegP(DirectFunctionCall2(locus_union,
+    locus_r = DatumGetLocusP(DirectFunctionCall2(locus_union,
                          PointerGetDatum(locus_r),
                          sortitem));
     *right++ = sort_items[i].index;
@@ -499,64 +447,18 @@ glocus_picksplit(PG_FUNCTION_ARGS)
 /*
 ** Equality methods
 */
-
 Datum
-locus_cmp(PG_FUNCTION_ARGS)
+gist_locus_same(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  int    cmp = strnatcasecmp(a->contig, b->contig);
-
-  if (cmp) {
-    PG_RETURN_INT32(cmp);
-  }
-  if (a->start < b->start)
-    PG_RETURN_INT32(-1);
-  if (a->start > b->start)
-    PG_RETURN_INT32(1);
-
-  if (a->end < b->end)
-    PG_RETURN_INT32(-1);
-  if (a->end > b->end)
-    PG_RETURN_INT32(1);
-
-  PG_RETURN_INT32(0);
-}
-
-/*
- * This function simply compares contig co-ordinates, disregarding contig name
- */
-Datum
-locus_coord_cmp(PG_FUNCTION_ARGS)
-{
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-
-  if (a->start < b->start)
-    PG_RETURN_INT32(-1);
-  if (a->start > b->start)
-    PG_RETURN_INT32(1);
-
-  if (a->end < b->end)
-    PG_RETURN_INT32(-1);
-  if (a->end > b->end)
-    PG_RETURN_INT32(1);
-
-  PG_RETURN_INT32(0);
-}
-
-Datum
-glocus_same(PG_FUNCTION_ARGS)
-{
-  bool *result = (bool *) PG_GETARG_POINTER(2);
+  bool     *result = (bool *) PG_GETARG_POINTER(2);
 
   if (DirectFunctionCall2(locus_same, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)))
-    *result = TRUE;
+    *result = true;
   else
-    *result = FALSE;
+    *result = false;
 
 #ifdef GIST_DEBUG
-  fprintf(stderr, "same: %s\n", (*result ? "TRUE" : "FALSE"));
+  fprintf(stderr, "same: %s\n", (*result ? "true" : "false"));
 #endif
 
   PG_RETURN_POINTER(result);
@@ -566,7 +468,7 @@ glocus_same(PG_FUNCTION_ARGS)
 ** SUPPORT ROUTINES
 */
 static Datum
-glocus_leaf_consistent(Datum key, Datum query, StrategyNumber strategy)
+gist_locus_leaf_consistent(Datum key, Datum query, StrategyNumber strategy)
 {
   Datum   retval;
 
@@ -603,16 +505,16 @@ glocus_leaf_consistent(Datum key, Datum query, StrategyNumber strategy)
       retval = DirectFunctionCall2(locus_contained, key, query);
       break;
     default:
-      retval = FALSE;
+      retval = false;
   }
 
   PG_RETURN_DATUM(retval);
 }
 
 static Datum
-glocus_internal_consistent(Datum key, Datum query, StrategyNumber strategy)
+gist_locus_internal_consistent(Datum key, Datum query, StrategyNumber strategy)
 {
-  bool retval;
+  bool    retval;
 
 #ifdef GIST_QUERY_DEBUG
   fprintf(stderr, "internal_consistent, %d\n", strategy);
@@ -652,14 +554,14 @@ glocus_internal_consistent(Datum key, Datum query, StrategyNumber strategy)
         DatumGetBool(DirectFunctionCall2(locus_overlap, key, query));
       break;
     default:
-      retval = FALSE;
+      retval = false;
   }
 
   PG_RETURN_BOOL(retval);
 }
 
 static Datum
-glocus_binary_union(Datum r1, Datum r2, int *sizep)
+gist_locus_binary_union(Datum r1, Datum r2, int *sizep)
 {
   Datum   retval;
 
@@ -673,21 +575,23 @@ glocus_binary_union(Datum r1, Datum r2, int *sizep)
 Datum
 locus_contains(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  int    same_contig = !strcmp(a->contig, b->contig);
-
-  PG_RETURN_BOOL(same_contig && (a->start <= b->start) && (a->end >= b->end));
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
+  PG_RETURN_BOOL(
+    (strcmp(a->contig, "<all>") == 0 || strnatcmp(a->contig, b->contig) == 0) &&
+    (a->lower <= b->lower) && (a->upper >= b->upper)
+  );
 }
 
 Datum
 locus_contained(PG_FUNCTION_ARGS)
 {
-  Datum  a = PG_GETARG_DATUM(0);
-  Datum  b = PG_GETARG_DATUM(1);
+  Datum   a = PG_GETARG_DATUM(0);
+  Datum   b = PG_GETARG_DATUM(1);
 
   PG_RETURN_DATUM(DirectFunctionCall2(locus_contains, b, a));
 }
+
 
 /*****************************************************************************
  * Operator class for R-tree indexing
@@ -696,9 +600,8 @@ locus_contained(PG_FUNCTION_ARGS)
 Datum
 locus_same(PG_FUNCTION_ARGS)
 {
-  int cmp = DatumGetInt32(
-    DirectFunctionCall2(locus_coord_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1))
-  );
+  int     cmp = DatumGetInt32(
+                  DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 
   PG_RETURN_BOOL(cmp == 0);
 }
@@ -708,99 +611,110 @@ locus_same(PG_FUNCTION_ARGS)
 Datum
 locus_overlap(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  int    same_contig = !strcmp(a->contig, b->contig);
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
 
   PG_RETURN_BOOL(
-    same_contig && (
-      ((a->end >= b->end) && (a->start <= b->end)) ||
-      ((b->end >= a->end) && (b->start <= a->end))
+    (strcmp(a->contig, "<all>") == 0 || strcmp(a->contig, "<all>") == 0 || strnatcmp(a->contig, b->contig) == 0)
+    &&
+    (
+      ((a->upper >= b->upper) && (a->lower <= b->upper)) ||
+      ((b->upper >= a->upper) && (b->lower <= a->upper))
     )
   );
 }
 
-/*
- * locus_over_left -- is the right edge of (a) located within (b)?
+/*  locus_over_left -- (a) is not beyond the right boundary of (b)
  */
 Datum
 locus_over_left(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  int    same_contig = !strcmp(a->contig, b->contig);
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
 
-  PG_RETURN_BOOL(same_contig && a->end <= b->end && a->end >= b->start);
+  PG_RETURN_BOOL(
+    (strcmp(a->contig, "<all>") == 0 || strnatcmp(a->contig, b->contig) <= 0)
+    &&
+    a->upper <= b->upper
+  );
 }
 
-/*
- * locus_left -- is (a) entirely on the left of (b)?
+/*  locus_left -- (a) entirely to the left of (b)
  */
 Datum
 locus_left(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  int    same_contig = !strcmp(a->contig, b->contig);
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
 
-  PG_RETURN_BOOL(same_contig && a->end < b->start);
+  if (strcmp(a->contig, "<all>") == 0 || strcmp(b->contig, "<all>") == 0) PG_RETURN_BOOL(false);
+  if (strnatcmp(a->contig, b->contig) > 0) PG_RETURN_BOOL(false);
+  if (strnatcmp(a->contig, b->contig) < 0) PG_RETURN_BOOL(true);
+
+  PG_RETURN_BOOL(a->upper < b->lower);
 }
 
-/*
- * locus_right -- is (a) entirely on the right of (b)?
+/*  locus_right -- (a) entirely to the right of (b)
  */
 Datum
 locus_right(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  int    same_contig = !strcmp(a->contig, b->contig);
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
 
-  PG_RETURN_BOOL(same_contig && a->start > b->end);
+  if (strcmp(a->contig, "<all>") == 0 || strcmp(b->contig, "<all>") == 0) PG_RETURN_BOOL(false);
+  if (strnatcmp(a->contig, b->contig) < 0) PG_RETURN_BOOL(false);
+  if (strnatcmp(a->contig, b->contig) > 0) PG_RETURN_BOOL(true);
+  PG_RETURN_BOOL(a->lower > b->upper);
 }
 
-/*  locus_over_right -- is the left edge of (a) located within (b)?
+/*  locus_over_right -- (a) is not beyond the left boundary of (b)
  */
 Datum
 locus_over_right(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  int    same_contig = !strcmp(a->contig, b->contig);
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
 
-  PG_RETURN_BOOL(same_contig && a->start >= b->start && a->start <= b->end);
+  PG_RETURN_BOOL(
+    (strcmp(a->contig, "<all>") == 0 || strnatcmp(a->contig, b->contig) >= 0)
+    &&
+    a->lower >= b->lower
+  );
 }
 
 Datum
 locus_union(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  LOCUS  *n;
-  int    same_contig = !strcmp(a->contig, b->contig);
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
+  LOCUS      *n;
 
-  n = (LOCUS *) palloc0(sizeof(*n));
+  n = (LOCUS *) palloc(sizeof(*n));
 
-  if (same_contig) {
-    /* take max of endpoints */
-    if (a->end > b->end)
-    {
-      n->end = a->end;
-    }
-    else
-    {
-      n->end = b->end;
-    }
+  if (strcmp(a->contig, b->contig) == 0) {
+    strcpy(n->contig, a->contig);
+    n->chr = a->chr;
+  }
+  else {
+    sprintf(n->contig, "<all>");
+    n->chr = false;
+  }
 
-    /* take min of start positions */
-    if (a->start < b->start)
-    {
-      n->start = a->start;
-    }
-    else
-    {
-      n->start = b->start;
-    }
+  /* take max of upper endpoints */
+  if (a->upper > b->upper) {
+    n->upper = a->upper;
+  }
+  else {
+    n->upper = b->upper;
+  }
+
+  /* take min of lower endpoints */
+  if (a->lower < b->lower) {
+    n->lower = a->lower;
+  }
+  else {
+    n->lower = b->lower;
   }
 
   PG_RETURN_POINTER(n);
@@ -809,33 +723,39 @@ locus_union(PG_FUNCTION_ARGS)
 Datum
 locus_inter(PG_FUNCTION_ARGS)
 {
-  LOCUS  *a = PG_GETARG_LOCUS_P(0);
-  LOCUS  *b = PG_GETARG_LOCUS_P(1);
-  LOCUS  *n;
-  int    same_contig = !strcmp(a->contig, b->contig);
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
+  LOCUS      *n;
 
-  n = (LOCUS *) palloc0(sizeof(*n));
+  n = (LOCUS *) palloc(sizeof(*n));
 
-  if (same_contig) {
-    /* take min of endpoints */
-    if (a->end < b->end)
-    {
-      n->end = a->end;
-    }
-    else
-    {
-      n->end = b->end;
-    }
+  if (strnatcmp(a->contig, b->contig) == 0) {
+    strcpy(n->contig, a->contig);
+    n->chr = a->chr;
+  }
+  else {
+    sprintf(n->contig, "<all>");
+    n->chr = false;
+  }
 
-    /* take max of start positions */
-    if (a->start > b->start)
-    {
-      n->start = a->start;
-    }
-    else
-    {
-      n->start = b->start;
-    }
+  /* take min of upper endpoints */
+  if (a->upper < b->upper)
+  {
+    n->upper = a->upper;
+  }
+  else
+  {
+    n->upper = b->upper;
+  }
+
+  /* take max of lower endpoints */
+  if (a->lower > b->lower)
+  {
+    n->lower = a->lower;
+  }
+  else
+  {
+    n->lower = b->lower;
   }
 
   PG_RETURN_POINTER(n);
@@ -844,20 +764,20 @@ locus_inter(PG_FUNCTION_ARGS)
 static void
 rt_locus_size(LOCUS *a, float *size)
 {
-  if (a == (LOCUS *) NULL || a->start <= a->end)
+  if (a == (LOCUS *) NULL)
     *size = 0.0;
   else
-    *size = (float) Abs(a->end - a->start);
+    *size = (float) a->upper - a->lower;
 
   return;
 }
 
 Datum
-locus_size(PG_FUNCTION_ARGS)
+length(PG_FUNCTION_ARGS)
 {
-  LOCUS *locus = PG_GETARG_LOCUS_P(0);
+  LOCUS      *locus = PG_GETARG_LOCUS_P(0);
 
-  PG_RETURN_INT32(Abs(locus->end - locus->start));
+  PG_RETURN_INT32(locus->upper - locus->lower);
 }
 
 
@@ -865,11 +785,47 @@ locus_size(PG_FUNCTION_ARGS)
  *           Miscellaneous operators
  *****************************************************************************/
 Datum
+locus_cmp(PG_FUNCTION_ARGS)
+{
+  LOCUS      *a = PG_GETARG_LOCUS_P(0);
+  LOCUS      *b = PG_GETARG_LOCUS_P(1);
+
+  /*
+   * First compare on contig
+   */
+  int32 contig_comparison = strnatcmp(a->contig, b->contig);
+  if (contig_comparison != 0) {
+    PG_RETURN_INT32(contig_comparison);
+  }
+
+  /*
+   * First compare on lower boundary position
+   */
+  if (a->lower < b->lower)
+    PG_RETURN_INT32(-1);
+  if (a->lower > b->lower)
+    PG_RETURN_INT32(1);
+
+
+  /*
+   * a->lower == b->lower, so compare the upper boundaries
+   */
+  if (a->upper < b->upper)
+    PG_RETURN_INT32(-1);
+  if (a->upper > b->upper)
+    PG_RETURN_INT32(1);
+
+  /*
+   * a->upper == b->upper
+   */
+  PG_RETURN_INT32(0);
+}
+
+Datum
 locus_lt(PG_FUNCTION_ARGS)
 {
-  int cmp = DatumGetInt32(
-    DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1))
-  );
+  int     cmp = DatumGetInt32(
+                  DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 
   PG_RETURN_BOOL(cmp < 0);
 }
@@ -877,9 +833,8 @@ locus_lt(PG_FUNCTION_ARGS)
 Datum
 locus_le(PG_FUNCTION_ARGS)
 {
-  int cmp = DatumGetInt32(
-    DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1))
-  );
+  int     cmp = DatumGetInt32(
+                  DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 
   PG_RETURN_BOOL(cmp <= 0);
 }
@@ -887,9 +842,8 @@ locus_le(PG_FUNCTION_ARGS)
 Datum
 locus_gt(PG_FUNCTION_ARGS)
 {
-  int cmp = DatumGetInt32(
-    DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1))
-  );
+  int     cmp = DatumGetInt32(
+                  DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 
   PG_RETURN_BOOL(cmp > 0);
 }
@@ -897,9 +851,8 @@ locus_gt(PG_FUNCTION_ARGS)
 Datum
 locus_ge(PG_FUNCTION_ARGS)
 {
-  int cmp = DatumGetInt32(
-    DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1))
-  );
+  int     cmp = DatumGetInt32(
+                  DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 
   PG_RETURN_BOOL(cmp >= 0);
 }
@@ -908,10 +861,8 @@ locus_ge(PG_FUNCTION_ARGS)
 Datum
 locus_different(PG_FUNCTION_ARGS)
 {
-  int cmp = DatumGetInt32(
-    DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1))
-  );
+  int     cmp = DatumGetInt32(
+                  DirectFunctionCall2(locus_cmp, PG_GETARG_DATUM(0), PG_GETARG_DATUM(1)));
 
   PG_RETURN_BOOL(cmp != 0);
 }
-

@@ -1,4 +1,10 @@
+# This is a .gitignore file for a project
+*.o
+*.bc
+locus_parse.c
+locus_scan.c
+
 # Generated subdirectories
-/log/
-/results/
-/tmp_check/
+log/
+results/
+tmp_check/
