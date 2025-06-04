@@ -13,7 +13,7 @@ EXTENSION = locus
 DATA = locus--0.0.1.sql
 PGFILEDESC = "locus - genomic locus [contig:pos-pos]"
 
-REGRESS = create io locus
+REGRESS = create io accessors comparator locus
 
 EXTRA_CLEAN = y.tab.c y.tab.h
 
