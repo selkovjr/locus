@@ -6,7 +6,7 @@ A PostgreSQL extension for representing genomic loci as composite types with ind
 
 - Efficient representation of genomic loci in the form `contig:start-end` or `contig:position`.
 - GiST indexing for overlap (`&&`) and containment operations
-- Optional tiling via `locus_tile_id()` to group loci into genomic tiles for efficient JOINs and aggregations.
+- A rich set of functions for manipulating genomic loci
 
 ## Usage
 
@@ -70,7 +70,7 @@ We previously noticed that using `locus_tile_id()` slowed down a join. Now that 
 2. **Test Queries**:
    - Join without tiling:
      ```sql
-      SELECT * FROM t t1 JOIN t t2 ON t1.pos && t2.pos
+      explain (analyze, verbose) SELECT * FROM t t1 JOIN t t2 ON t1.pos && t2.pos;
      ```
    - Join with tiling:
      ```sql
