@@ -1,0 +1,15 @@
+--
+--  Locus datatype test
+--
+SELECT count(*) FROM test_locus t1 JOIN test_locus t2 ON t1.p = t2.p;
+  count  
+---------
+ 7198818
+(1 row)
+
+SELECT count(*) FROM test_locus t1 JOIN test_locus t2 ON t1.p && t2.p;
+  count   
+----------
+ 10655486
+(1 row)
+

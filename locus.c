@@ -204,7 +204,7 @@ center(PG_FUNCTION_ARGS)
 {
   LOCUS      *locus = PG_GETARG_LOCUS_P(0);
 
-  PG_RETURN_FLOAT4(((float) locus->lower + (float) locus->upper) / 2.0);
+  PG_RETURN_INT32( (locus->lower + locus->upper) / 2 );
 }
 
 // ------------------------- lower ---------------------------

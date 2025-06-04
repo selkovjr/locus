@@ -1,0 +1,20 @@
+--
+--  Locus datatype test
+--
+-- Test the tiling function
+--
+-- Test default tile size (1 million)
+SELECT locus_tile_id('12:112847287-112944263'::locus);
+-- Expected: '12:112' (112847287 / 1,000,000 = 112)
+
+-- Test explicit tile size
+SELECT locus_tile_id('12:112847287-112944263'::locus, 500000);
+-- Expected: '12:225' (112847287 / 500000 = 225)
+
+-- Test very small tile size
+SELECT locus_tile_id('1:50-100'::locus, 10);
+-- Expected: '1:5'
+
+-- Test error on zero tile size
+SELECT locus_tile_id('1:50-100'::locus, 0);
+-- Expected: ERROR: tile width must be positive

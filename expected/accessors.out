@@ -100,8 +100,8 @@ SELECT range('7'::locus);
 (1 row)
 
 SELECT center('7'::locus);
-    center
----------------
- 1.0737418e+09
+   center   
+------------
+ 1073741823
 (1 row)
 
