@@ -70,15 +70,15 @@ We previously noticed that using `locus_tile_id()` slowed down a join. Now that 
 2. **Test Queries**:
    - Join without tiling:
      ```sql
-     SELECT * FROM t1 JOIN t2 ON t1.pos && t2.pos;
+      SELECT * FROM t t1 JOIN t t2 ON t1.pos && t2.pos
      ```
    - Join with tiling:
      ```sql
      SELECT * FROM (
-       SELECT *, locus_tile_id(pos) AS tile FROM t1
+       SELECT *, locus_tile_id(pos) AS tile FROM t
      ) t1_ext
      JOIN (
-       SELECT *, locus_tile_id(pos) AS tile FROM t2
+       SELECT *, locus_tile_id(pos) AS tile FROM t
      ) t2_ext
      ON t1_ext.tile = t2_ext.tile AND t1_ext.pos && t2_ext.pos;
      ```
