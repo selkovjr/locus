@@ -99,7 +99,7 @@ PG_FUNCTION_INFO_V1(locus_ge);
 PG_FUNCTION_INFO_V1(locus_different);
 
 /*
-** Tiling function to support unrestricted joins
+** Experimental tiling function to support performance benchmarks
 */
 PG_FUNCTION_INFO_V1(locus_tile_id);
 
@@ -873,6 +873,9 @@ locus_different(PG_FUNCTION_ARGS)
 }
 
 
+// This function was suggested by ChatGPT as a benchmarking tool to evaluate
+// GIST performance with JOINs over large genomic datasets. The region tiling approach
+// is used by bedtools and other tools, so it can be a relatable benchmark.
 Datum
 locus_tile_id(PG_FUNCTION_ARGS)
 {
