@@ -255,8 +255,8 @@ CREATE OPERATOR && (
   RIGHTARG = locus,
   PROCEDURE = locus_overlap,
   COMMUTATOR = '&&',
-  RESTRICT = areasel,
-  JOIN = areajoinsel
+  RESTRICT = contsel,
+  JOIN = contjoinsel
 );
 
 CREATE OPERATOR &> (
@@ -370,6 +370,12 @@ RETURNS internal
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
+
+-- Create a function to compute a tile ID for a locus
+CREATE FUNCTION locus_tile_id(locus, int8 DEFAULT 1000000)
+RETURNS text
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
 
 -- Create operator classes for indexing
 

@@ -98,6 +98,11 @@ PG_FUNCTION_INFO_V1(locus_gt);
 PG_FUNCTION_INFO_V1(locus_ge);
 PG_FUNCTION_INFO_V1(locus_different);
 
+/*
+** Tiling function to support unrestricted joins
+*/
+PG_FUNCTION_INFO_V1(locus_tile_id);
+
 
 /*****************************************************************************
  * Input/Output functions
@@ -866,3 +871,32 @@ locus_different(PG_FUNCTION_ARGS)
 
   PG_RETURN_BOOL(cmp != 0);
 }
+
+
+Datum
+locus_tile_id(PG_FUNCTION_ARGS)
+{
+    LOCUS *loc = (LOCUS *) PG_GETARG_POINTER(0);
+    int64 tile_width = 1000000;
+    int64 start;
+    int64 tile_id;
+    char buf[64];
+    text *result;
+
+    if (PG_NARGS() == 2 && !PG_ARGISNULL(1)) {
+        tile_width = PG_GETARG_INT64(1);
+        if (tile_width <= 0)
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                     errmsg("tile width must be positive")));
+    }
+
+    start = (int64) loc->lower;
+    tile_id = start / tile_width;
+
+    snprintf(buf, sizeof(buf), "%s:%lld", loc->contig, (long long) tile_id);
+    result = cstring_to_text(buf);
+
+    PG_RETURN_TEXT_P(result);
+}
+

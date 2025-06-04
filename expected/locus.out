@@ -10,7 +10,7 @@ SELECT amname, opcname
          WHERE opc.oid >= 16384
          ORDER BY 1, 2 OFFSET 0) ss
  WHERE NOT amvalidate(oid);
- amname | opcname 
+ amname | opcname
 --------+---------
 (0 rows)
 
@@ -19,172 +19,172 @@ SELECT amname, opcname
 --
 -- Whole contig
 SELECT '1'::locus AS locus;
- locus 
+ locus
 -------
  1
 (1 row)
 
 SELECT 'chr1'::locus AS locus;
- locus 
+ locus
 -------
  chr1
 (1 row)
 
 SELECT 'GL383557.1'::locus AS locus;
-   locus    
+   locus
 ------------
  GL383557.1
 (1 row)
 
 -- Point position
 SELECT '16:89831249'::locus AS locus;
-    locus    
+    locus
 -------------
  16:89831249
 (1 row)
 
 SELECT ' 16 : 89831249 '::locus AS locus;
-    locus     
+    locus
 --------------
   16:89831249
 (1 row)
 
 SELECT ' 16	:	89831249 '::locus AS locus;
-    locus     
+    locus
 --------------
   16:89831249
 (1 row)
 
 SELECT '16:89,831,249'::locus AS locus;
-    locus    
+    locus
 -------------
  16:89831249
 (1 row)
 
 SELECT ' 16 : 89,831,249 '::locus AS locus;
-    locus     
+    locus
 --------------
   16:89831249
 (1 row)
 
 SELECT ' 16	:	89,831,249 '::locus AS locus;
-    locus     
+    locus
 --------------
   16:89831249
 (1 row)
 
 SELECT 'chr16:89831249'::locus AS locus;
-     locus      
+     locus
 ----------------
  chr16:89831249
 (1 row)
 
 SELECT ' chr16 : 89831249 '::locus AS locus;
-      locus      
+      locus
 -----------------
   chr16:89831249
 (1 row)
 
 SELECT ' chr16	:	89831249 '::locus AS locus;
-      locus      
+      locus
 -----------------
   chr16:89831249
 (1 row)
 
 SELECT 'chr16:89,831,249'::locus AS locus;
-     locus      
+     locus
 ----------------
  chr16:89831249
 (1 row)
 
 SELECT ' chr16 : 89,831,249 '::locus AS locus;
-      locus      
+      locus
 -----------------
   chr16:89831249
 (1 row)
 
 SELECT ' chr16	:	89,831,249 '::locus AS locus;
-      locus      
+      locus
 -----------------
   chr16:89831249
 (1 row)
 
 -- Ranges
 SELECT 'GL383557.1:100-500'::locus AS locus;
-       locus        
+       locus
 --------------------
  GL383557.1:100-500
 (1 row)
 
 SELECT '16:89831249-89831439'::locus AS locus;
-        locus         
+        locus
 ----------------------
  16:89831249-89831439
 (1 row)
 
 SELECT ' 16 : 89831249 - 89831439 '::locus AS locus;
-         locus         
+         locus
 -----------------------
   16:89831249-89831439
 (1 row)
 
 SELECT ' 16 : 89831249	-	89831439 '::locus AS locus;
-         locus         
+         locus
 -----------------------
   16:89831249-89831439
 (1 row)
 
 SELECT '16:89,831,249-89,831,439'::locus AS locus;
-        locus         
+        locus
 ----------------------
  16:89831249-89831439
 (1 row)
 
 SELECT 'chr16:89831249-89831439'::locus AS locus;
-          locus          
+          locus
 -------------------------
  chr16:89831249-89831439
 (1 row)
 
 SELECT 'chr16:89,831,249-89,831,439'::locus AS locus;
-          locus          
+          locus
 -------------------------
  chr16:89831249-89831439
 (1 row)
 
 -- Open intervals
 SELECT '16:1000000-'::locus AS locus;
-    locus    
+    locus
 -------------
  16:1000000-
 (1 row)
 
 SELECT 'chr16:1000000-'::locus AS locus;
-     locus      
+     locus
 ----------------
  chr16:1000000-
 (1 row)
 
 SELECT 'chr16:1,000,000-'::locus AS locus;
-     locus      
+     locus
 ----------------
  chr16:1000000-
 (1 row)
 
 SELECT '16:-89831249'::locus AS locus;
-    locus     
+    locus
 --------------
  16:-89831249
 (1 row)
 
 SELECT 'chr16:-89831249'::locus AS locus;
-      locus      
+      locus
 -----------------
  chr16:-89831249
 (1 row)
 
 SELECT 'chr16:-89,831,249'::locus AS locus;
-      locus      
+      locus
 -----------------
  chr16:-89831249
 (1 row)
@@ -228,103 +228,103 @@ LINE 1: SELECT 'chr16:garbage-89831249'::locus AS locus;
 DETAIL:   bad character g
 -- Testng accessors
 SELECT contig('7:10000-20000'::locus);
- contig 
+ contig
 --------
  7
 (1 row)
 
 SELECT contig('chr7:10000-20000'::locus);
- contig 
+ contig
 --------
  7
 (1 row)
 
 SELECT lower('7:10000-20000'::locus);
- lower 
+ lower
 -------
  10000
 (1 row)
 
 SELECT upper('7:10000-20000'::locus);
- upper 
+ upper
 -------
  20000
 (1 row)
 
 SELECT length('7:10000-20000'::locus);
- length 
+ length
 --------
   10000
 (1 row)
 
 SELECT range('7:10000-20000'::locus);
-     range     
+     range
 ---------------
  [10000,20000]
 (1 row)
 
 SELECT center('7:10000-20000'::locus);
- center 
+ center
 --------
   15000
 (1 row)
 
 SELECT lower('7:10000'::locus);
- lower 
+ lower
 -------
  10000
 (1 row)
 
 SELECT upper('7:10000'::locus);
- upper 
+ upper
 -------
  10000
 (1 row)
 
 SELECT length('7:10000'::locus);
- length 
+ length
 --------
       0
 (1 row)
 
 SELECT range('7:10000'::locus);
-     range     
+     range
 ---------------
  [10000,10000]
 (1 row)
 
 SELECT center('7:10000'::locus);
- center 
+ center
 --------
   10000
 (1 row)
 
 SELECT lower('7'::locus);
- lower 
+ lower
 -------
      0
 (1 row)
 
 SELECT upper('7'::locus);
-   upper    
+   upper
 ------------
  2147483647
 (1 row)
 
 SELECT length('7'::locus);
-   length   
+   length
 ------------
  2147483647
 (1 row)
 
 SELECT range('7'::locus);
-     range      
+     range
 ----------------
  [0,2147483647]
 (1 row)
 
 SELECT center('7'::locus);
-    center     
+    center
 ---------------
  1.0737418e+09
 (1 row)
@@ -332,19 +332,19 @@ SELECT center('7'::locus);
 -- Teting the comparator
 --
 select locus_cmp('chr6', 'chr21');
- locus_cmp 
+ locus_cmp
 -----------
         -1
 (1 row)
 
 select locus_cmp('chr6:29474946-29475446'::locus, 'chr21:29474869-29475900');
- locus_cmp 
+ locus_cmp
 -----------
         -1
 (1 row)
 
 select locus_cmp('chr6:29474946-29475446'::locus, 'chr6:28474869-29475900');
- locus_cmp 
+ locus_cmp
 -----------
          1
 (1 row)
@@ -355,43 +355,43 @@ select locus_cmp('chr6:29474946-29475446'::locus, 'chr6:28474869-29475900');
 -- equality/inequality:
 --
 SELECT '2:100000-100000'::locus = 'chr20:100000'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT '20:100000-100000'::locus = 'chr20:100000'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT '20:100000-200000'::locus = 'chr20:100000-200000'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT '20:100000-199999'::locus = '20:100000-200000'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT '20:100000-199999'::locus != '20:100000-200000'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT '20:100000-100000'::locus != 'chr20'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT '20:100000-100000'::locus <> 'chr20'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
@@ -399,43 +399,43 @@ SELECT '20:100000-100000'::locus <> 'chr20'::locus AS bool;
 -- overlap
 --
 SELECT '1'::locus && '2'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT '1'::locus && 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1'::locus && '1:10000000'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:10000000-'::locus && '1:15000000'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:-10000000'::locus && '1:10000000-'::locus AS bool; -- inclusive
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:-9999999'::locus && '1:10000000-'::locus AS bool; -- inclusive
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:-10000000'::locus && '1:15000000-'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
@@ -443,61 +443,61 @@ SELECT 'chr1:-10000000'::locus && '1:15000000-'::locus AS bool;
 -- none of A is above the upper bound of B
 --
 SELECT 'chr1'::locus <& 'chr2'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr3'::locus <& 'chr2'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:1'::locus <& 'chr1:0'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:0'::locus <& 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:0-1'::locus <& 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:0-2'::locus <& 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:0-2'::locus <& 'chr1:5-30'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:0-200'::locus <& 'chr1:5-30'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1'::locus <& 'chr1:10000'::locus AS bool; -- A spans the entire domain
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:-1001'::locus <& 'chr1:1000-'::locus AS bool;  -- the upper bound of B is insurpassable
- bool 
+ bool
 ------
  t
 (1 row)
@@ -505,55 +505,55 @@ SELECT 'chr1:-1001'::locus <& 'chr1:1000-'::locus AS bool;  -- the upper bound o
 -- none of A is below the lower bound of B
 --
 SELECT 'chr1'::locus &> 'chr2'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr3'::locus &> 'chr2'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:1'::locus &> 'chr1:0'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:0'::locus &> 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:0-1'::locus &> 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:2-10'::locus &> 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:5-30'::locus &> 'chr1:1-3'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:10000'::locus &> 'chr1'::locus AS bool; -- the lower bound of B is the lowest possible
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1'::locus &> 'chr1:10000'::locus AS bool; -- Aspans the entire domain
- bool 
+ bool
 ------
  f
 (1 row)
@@ -561,67 +561,67 @@ SELECT 'chr1'::locus &> 'chr1:10000'::locus AS bool; -- Aspans the entire domain
 -- left
 --
 SELECT 'chr1'::locus << 'chr2'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1'::locus << 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT '<all>'::locus << 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1'::locus << '<all>'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:1'::locus << 'chr2:0'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:0'::locus << 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:0-1'::locus << 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:0-1'::locus << 'chr1:2'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:0-1'::locus << 'chr1:2-'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:0-10'::locus << 'chr1:10-20'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:-1000'::locus << 'chr1:2000-'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
@@ -629,122 +629,122 @@ SELECT 'chr1:-1000'::locus << 'chr1:2000-'::locus AS bool;
 -- right
 --
 SELECT 'chr2'::locus >> 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1'::locus >> 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT '<all>'::locus >> 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1'::locus >> '<all>'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr2:0'::locus >> 'chr1:1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:1'::locus >> 'chr1:0'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:1-2'::locus >> 'chr1:0-1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:2-'::locus >> 'chr1:0-1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:10-20'::locus >> 'chr1:0-10'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:2000-'::locus >> 'chr1:-1000'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 -- "contained in" (the left value belongs within the interval specified in the right value):
 SELECT 'chr1'::locus <@ '<all>'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1'::locus <@ 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr2'::locus <@ 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:1000-'::locus <@ 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:-999'::locus <@ 'chr1:1000-'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:200-500'::locus <@ 'chr1:100-900'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr7:200-500'::locus <@ 'chr1:100-900'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:200-500'::locus <@ '<all>:100-900'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:100-900'::locus <@ '<all>:200-500'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT '<all>:200-500'::locus <@ 'chr1:100-900'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
@@ -752,65 +752,94 @@ SELECT '<all>:200-500'::locus <@ 'chr1:100-900'::locus AS bool;
 -- "contains" (the left value contains the interval specified in the right value):
 --
 SELECT '<all>'::locus @> 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1'::locus @> 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr2'::locus @> 'chr1'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1'::locus @> 'chr1:1000-'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr1:-900'::locus @> 'chr1:1000-'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:100-900'::locus @> 'chr1:200-500'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT 'chr7:100-900'::locus @> 'chr1:200-500'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT '<all>:100-900'::locus @> 'chr1:200-500'::locus AS bool;
- bool 
+ bool
 ------
  t
 (1 row)
 
 SELECT '<all>:200-500'::locus @> 'chr1:100-900'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
 SELECT 'chr1:100-900'::locus @> '<all>:200-500'::locus AS bool;
- bool 
+ bool
 ------
  f
 (1 row)
 
+-- Test the tiling function
+-- Test default tile size (1 million)
+SELECT locus_tile_id('12:112847287-112944263'::locus);
+ locus_tile_id
+---------------
+ 12:112
+(1 row)
+
+-- Expected: '12:112' (112847287 / 1,000,000 = 112)
+-- Test explicit tile size
+SELECT locus_tile_id('12:112847287-112944263'::locus, 500000);
+ locus_tile_id
+---------------
+ 12:225
+(1 row)
+
+-- Expected: '12:225' (112847287 / 500000 = 225)
+-- Test very small tile size
+SELECT locus_tile_id('1:50-100'::locus, 10);
+ locus_tile_id
+---------------
+ 1:5
+(1 row)
+
+-- Expected: '1:5'
+-- Test error on zero tile size
+SELECT locus_tile_id('1:50-100'::locus, 0);
+ERROR:  tile width must be positive
+-- Expected: ERROR: tile width must be positive
 -- Load some example data and build the index
 --
 CREATE TABLE test_locus (p locus);
@@ -819,56 +848,56 @@ CREATE INDEX test_locus_ix ON test_locus USING gist (p);
 --
 -- Test operators on the table
 SELECT count(*) FROM test_locus WHERE p && '21';
- count 
+ count
 -------
  14161
 (1 row)
 
 SELECT count(*) FROM test_locus WHERE p && 'chr21:10600000-12608058';
- count 
+ count
 -------
    208
 (1 row)
 
 SELECT count(*) FROM test_locus WHERE p <& 'chr21:28800000-30000000';
- count  
+ count
 --------
  270982
 (1 row)
 
 SELECT count(*) FROM test_locus WHERE p << 'chr21:28800000-30000000';
- count  
+ count
 --------
  261810
 (1 row)
 
 SELECT count(*) FROM test_locus WHERE p >> 'chr21:28800000-30000000';
- count 
+ count
 -------
  62578
 (1 row)
 
 SELECT count(*) FROM test_locus WHERE p &> 'chr21:28800000-30000000';
- count 
+ count
 -------
  63971
 (1 row)
 
 SELECT count(*) FROM test_locus WHERE p <@ 'chr21:28800000-30000000';
- count 
+ count
 -------
     68
 (1 row)
 
 SELECT count(*) FROM test_locus WHERE p <@ '<all>:28800000-30000000';
- count 
+ count
 -------
  10520
 (1 row)
 
 -- Test sorting
 SELECT * FROM test_locus WHERE range(p) && '[29475000, 29475000]' ORDER by p;
-            p            
+            p
 -------------------------
  chr1:29474255-29475739
  chr1:29474365-29475739
@@ -884,7 +913,7 @@ SELECT * FROM test_locus WHERE range(p) && '[29475000, 29475000]' ORDER by p;
 
 -- Test lower, upper, and center functions
 SELECT p, lower(p), center(p), upper(p) FROM test_locus WHERE length(p) > 100 limit 6;
-            p             | lower  |  center  | upper  
+            p             | lower  |  center  | upper
 --------------------------+--------+----------+--------
  GL000192.1:493155-493369 | 493155 |   493262 | 493369
  GL000192.1:495329-495566 | 495329 | 495447.5 | 495566
