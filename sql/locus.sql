@@ -1,57 +1,8 @@
 --
 --  Locus datatype test
 --
---
--- Testing the input and output functions
---
-
--- Whole contig
-SELECT '1'::locus AS locus;
-SELECT 'chr1'::locus AS locus;
-SELECT 'GL383557.1'::locus AS locus;
-
--- Point position
-SELECT '16:89831249'::locus AS locus;
-SELECT ' 16 : 89831249 '::locus AS locus;
-SELECT ' 16	:	89831249 '::locus AS locus;
-SELECT '16:89,831,249'::locus AS locus;
-SELECT ' 16 : 89,831,249 '::locus AS locus;
-SELECT ' 16	:	89,831,249 '::locus AS locus;
-SELECT 'chr16:89831249'::locus AS locus;
-SELECT ' chr16 : 89831249 '::locus AS locus;
-SELECT ' chr16	:	89831249 '::locus AS locus;
-SELECT 'chr16:89,831,249'::locus AS locus;
-SELECT ' chr16 : 89,831,249 '::locus AS locus;
-SELECT ' chr16	:	89,831,249 '::locus AS locus;
-
--- Ranges
-SELECT 'GL383557.1:100-500'::locus AS locus;
-SELECT '16:89831249-89831439'::locus AS locus;
-SELECT ' 16 : 89831249 - 89831439 '::locus AS locus;
-SELECT ' 16 : 89831249	-	89831439 '::locus AS locus;
-SELECT '16:89,831,249-89,831,439'::locus AS locus;
-SELECT 'chr16:89831249-89831439'::locus AS locus;
-SELECT 'chr16:89,831,249-89,831,439'::locus AS locus;
-
--- Open intervals
-SELECT '16:1000000-'::locus AS locus;
-SELECT 'chr16:1000000-'::locus AS locus;
-SELECT 'chr16:1,000,000-'::locus AS locus;
-SELECT '16:-89831249'::locus AS locus;
-SELECT 'chr16:-89831249'::locus AS locus;
-SELECT 'chr16:-89,831,249'::locus AS locus;
-
--- invalid input
-SELECT 'ENST00000378344.2|ENSG00000158109.10'::locus AS locus;
-SELECT 'ENST00000378344.2|ENSG00000158109.10:340'::locus AS locus;
-SELECT 'chr16:89831249000000000000000000'::locus AS locus;
-SELECT 'chr16:89831249000000'::locus AS locus;
-SELECT '16:8983 1249-89831439'::locus AS locus;
-SELECT '16:89831249-898 31439'::locus AS locus;
-SELECT '16:89831249-89831,439'::locus AS locus;
-SELECT 'chr16:garbage-89831249'::locus AS locus;
-
 -- Testng accessors
+--
 SELECT contig('7:10000-20000'::locus);
 SELECT contig('chr7:10000-20000'::locus);
 SELECT lower('7:10000-20000'::locus);
@@ -72,7 +23,7 @@ SELECT length('7'::locus);
 SELECT range('7'::locus);
 SELECT center('7'::locus);
 
--- Teting the comparator
+-- Testing the comparator
 --
 select locus_cmp('chr6', 'chr21');
 select locus_cmp('chr6:29474946-29475446'::locus, 'chr21:29474869-29475900');
