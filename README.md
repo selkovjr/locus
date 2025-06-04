@@ -37,7 +37,8 @@ SELECT locus_tile_id('2:112847287-112847500');
 ## Testing Notes
 
 PostgreSQL 12's regression harness preserves trailing whitespace in output.
-To normalize this, `diff -Z` is used via a custom wrapper script.
+To normalize this, `diff -Z` is used via a custom wrapper script, `./diff`,
+overriding the system `diff` command by patching $PATH in `Makefile`.
 
 You can run regression tests with:
 
@@ -45,7 +46,7 @@ You can run regression tests with:
 make installcheck
 ```
 
-If trailing spaces still cause issues, check `filtered_diff.sh` or use:
+If trailing spaces still cause issues, check `./diff-ignore-trailing-space` or use:
 
 ```bash
 diff -Z expected/locus.out results/locus.out
