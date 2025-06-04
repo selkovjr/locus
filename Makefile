@@ -1,5 +1,10 @@
 # contrib/locus/Makefile
 #
+
+# Override DIFF to ignore trailing whitespace
+# (diff in $(CURDIR) should be symlinked to diff-ignore-trailing-whitespace)
+override PATH := $(CURDIR):$(PATH)
+
 USE_PGXS = 1
 MODULE_big = locus
 OBJS = locus.o locus_parse.o strnatcmp.o $(WIN32RES)
