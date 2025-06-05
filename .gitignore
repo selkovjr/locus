@@ -3,6 +3,10 @@
 *.bc
 locus_parse.c
 locus_scan.c
+locus.so
+regression.diffs
+regression.out
+
 
 # Generated subdirectories
 log/

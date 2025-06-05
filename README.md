@@ -1,6 +1,6 @@
 # locus
 
-A PostgreSQL extension for representing genomic loci as composite types with indexing and query support.
+A PostgreSQL extension for representing genomic loci as built-in data type with indexing and query support.
 
 ## Features
 
@@ -21,34 +21,22 @@ SELECT 'chr16:89831249-89831439'::locus AS locus;
 
 SELECT 'chr16:1,000,000-'::locus AS locus;
 -- Returns chr16:1000000-  (1,000,000 .. ∞)
-CREATE TABLE test_locus (p locus);
 
-SELECT locus_tile_id('chr1:100000-100999');
--- Returns: 'chr1:100'
+CREATE TABLE test_locus (l locus);
+CREATE INDEX p_gist_ix ON test_locus USING gist(l)
+SELECT * from test_locus where l <@ '12:112847287-112944263'
+-- Returns all loci contained in the PTPN11 gene
 
-SELECT locus_tile_id('chr1:100000-100999', 1000000);
--- Returns: 'chr1:100'
-```
-
-## Tiling
-
-The `locus_tile_id(locus, tile_size)` function computes a tile ID string like `contig:tile_start`, where:
-
-- `contig` is the locus contig (e.g., 'chr1')
-- `tile_start` is the lower coordinate rounded down to the nearest tile boundary
-- `tile_size` (optional) defaults to 1,000,000
-
-Example:
-```sql
-SELECT locus_tile_id('2:112847287-112847500');
--- '2:112000000'
+SELECT * from t1 JOIN t2 ON t1.l && t2.l;
+-- Perform a join on overlapping loci
 ```
 
 ## Testing Notes
 
-PostgreSQL 12's regression harness preserves trailing whitespace in output.
+PostgreSQL regression harness uses `psql` behind the scenes, which can add trailing whitespace to column names and values in the output, depending on the default formatting rule.
+
 To normalize this, `diff -Z` is used via a custom wrapper script, `./diff`,
-overriding the system `diff` command by patching $PATH in `Makefile`.
+overriding the system `diff` command by patching `$(PATH)` in the `Makefile`. The local executable `./diff` is a symlink to `diff-ignore-trailing-space` (named so for clarity), which forks `/usr/bin/diff`. Replace that with the absolute path to your system `diff`, if different; the absolute path is needed to avoid an infinite loop.
 
 You can run regression tests with:
 
@@ -56,54 +44,9 @@ You can run regression tests with:
 make installcheck
 ```
 
-If trailing spaces still cause issues, check `./diff-ignore-trailing-space` or use:
-
-```bash
-diff -Z expected/locus.out results/locus.out
-```
-
 ## Known Issues
 
-- Fixed internal storage (32 bytes) may be limiting for assemblies with long contig names.
-- Performance of `locus_tile_id()` in large joins needs further evaluation.
+- Fixed internal storage (32 bytes) may be limiting. A version of the `locus` type can be easily built with `INTERNALLENGTH = VARIABLE`, at a cost in storage size and performance.
 
 
 ---
-
-### 📈 2. Performance Testing of `locus_tile_id()`
-
-We previously noticed that using `locus_tile_id()` slowed down a join. Now that it's working and passes regression tests, let's design a fair benchmark:
-
-#### 🧪 Test Setup:
-
-1. **Dataset Size**: Use a real-world scale — e.g., 10M rows.
-2. **Test Queries**:
-   - Join without tiling:
-     ```sql
-      explain (analyze, verbose) SELECT * FROM t t1 JOIN t t2 ON t1.pos && t2.pos;
-     ```
-   - Join with tiling:
-     ```sql
-     SELECT * FROM (
-       SELECT *, locus_tile_id(pos) AS tile FROM t
-     ) t1_ext
-     JOIN (
-       SELECT *, locus_tile_id(pos) AS tile FROM t
-     ) t2_ext
-     ON t1_ext.tile = t2_ext.tile AND t1_ext.pos && t2_ext.pos;
-     ```
-3. **Measure**:
-   - Total runtime (`EXPLAIN ANALYZE`)
-   - Rows processed
-   - Index usage
-   - Join strategy (`Nested Loop`, `Hash Join`, etc.)
-
-#### 🧩 Potential Improvements:
-
-If `locus_tile_id()` proves to be the bottleneck:
-- Consider caching the tile column.
-- Index it (e.g., `CREATE INDEX ON t (tile)`).
-- Explore using `STORED` generated columns in PG ≥12:
-  ```sql
-  ALTER TABLE t ADD COLUMN tile text GENERATED ALWAYS AS (locus_tile_id(pos)) STORED;
-
