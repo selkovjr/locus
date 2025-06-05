@@ -13,6 +13,16 @@ A PostgreSQL extension for representing genomic loci as composite types with ind
 ```sql
 CREATE EXTENSION locus;
 
+SELECT '16:89831249'::locus AS locus;
+-- Returns 16:89831249
+
+SELECT 'chr16:89831249-89831439'::locus AS locus;
+-- Returns chr16:89831249-89831439
+
+SELECT 'chr16:1,000,000-'::locus AS locus;
+-- Returns chr16:1000000-  (1,000,000 .. ∞)
+CREATE TABLE test_locus (p locus);
+
 SELECT locus_tile_id('chr1:100000-100999');
 -- Returns: 'chr1:100'
 
