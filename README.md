@@ -1,6 +1,6 @@
 # locus
 
-A PostgreSQL extension for representing genomic loci as built-in data type with indexing and query support.
+A PostgreSQL extension for representing genomic loci as a built-in data type with indexing and query support.
 
 ## Features
 
