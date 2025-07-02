@@ -1,8 +1,8 @@
 # locus
 
-A PostgreSQL extension for representing genomic loci as a built-in data type with indexing and query support.
+A PostgreSQL extension for representing genomic loci as a built-in data type
 
-**Update**: this extension has been tested with PostgreSQL 17.5. It was originally developed for version 12. Backend API has changed at some point between these versions; if the extension failes to build, try
+**Update**: this extension has been tested with PostgreSQL 17.5. It was originally developed for version 12. Backend API has changed at some point between these versions; if the extension fails to build, try
 
 ```shell
 git checkout v0.0.1
