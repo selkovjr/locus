@@ -1,4 +1,4 @@
 comment = 'genomic locus type [contig:start-end]'
-default_version = '0.0.1'
+default_version = '0.0.2'
 relocatable = true
 module_pathname = '$libdir/locus'

@@ -10,7 +10,7 @@ MODULE_big = locus
 OBJS = locus.o locus_parse.o strnatcmp.o $(WIN32RES)
 
 EXTENSION = locus
-DATA = locus--0.0.1.sql
+DATA = locus--0.0.1.sql locus--0.0.2.sql
 PGFILEDESC = "locus - genomic locus [contig:pos-pos]"
 
 REGRESS = create-ext io accessors comparator functions operators tiling create-table load-table index queries join

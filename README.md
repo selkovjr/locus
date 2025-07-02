@@ -2,6 +2,8 @@
 
 A PostgreSQL extension for representing genomic loci as a built-in data type with indexing and query support.
 
+Update: this extension has been tested with PostgreSQL v17.5.
+
 ## Features
 
 - Efficient representation of genomic loci in the form `contig:start-end` or `contig:position`.
@@ -46,7 +48,14 @@ make installcheck
 
 ## Known Issues
 
-- Fixed internal storage (32 bytes) may be limiting. A version of the `locus` type can be easily built with `INTERNALLENGTH = VARIABLE`, at a cost in storage size and performance.
-
+- Fixed internal storage (32 bytes) may be limiting in applications with long contig names. A version of the `locus` type can be easily built with `INTERNALLENGTH = VARIABLE`, at a cost in storage size and performance.
 
 ---
+
+## Changelog
+
+### 0.0.2 (2025-07-02)
+- Updated `locus.control` to set `default_version = '0.0.2'`
+- Added `locus--0.0.2.sql` (duplicate of 0.0.1)
+- Updated `Makefile` to install both `locus--0.0.1.sql` and `locus--0.0.2.sql`
+- **Datum API change:** Updated the `DatumGetLocusP` and `PG_GETARG_LOCUS_P` macros in `locus.c` for correct and portable handling of PostgreSQL Datum values and LOCUS pointers.

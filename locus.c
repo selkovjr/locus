@@ -17,14 +17,13 @@
 #include "utils/builtins.h"
 #include "utils/typcache.h"
 #include "utils/rangetypes.h"
-#include "fmgr.h"
 
 #include "locus_data.h"
 #include "strnatcmp.h"
 
 
 #define DatumGetLocusP(X) ((LOCUS *) DatumGetPointer(X))
-#define PG_GETARG_LOCUS_P(n) DatumGetLocusP(PG_GETARG_POINTER(n))
+#define PG_GETARG_LOCUS_P(n) ((LOCUS *) PG_GETARG_POINTER(n))
 
 
 /*
@@ -174,28 +173,28 @@ range(PG_FUNCTION_ARGS)
 {
   LOCUS      *locus = PG_GETARG_LOCUS_P(0);
 
-  // The oid and type data are delived from the int8range return in  CREATE FUNCTION
   Oid     rngtypid = get_fn_expr_rettype(fcinfo->flinfo);
   TypeCacheEntry *typcache = range_get_typcache(fcinfo, rngtypid);
 
   RangeBound  lower;
   RangeBound  upper;
 
-  // lower.val = locus->lower == 0 ? (Datum) 0 : locus->lower;  /* this will be useful if ever get to define infinite intervals
-  lower.val = locus->lower;
-  // lower.infinite = locus->lower == 0;
+  // lower.val = Int32GetDatum(locus->lower) == 0 ? (Datum) 0 : Int32GetDatum(locus->lower);  /* this will be useful if we ever get to define infinite intervals
+  lower.val = Int32GetDatum(locus->lower);
+  // upper.infinite = Int32GetDatum(locus->upper) == INT_MAX;
   lower.infinite = false;
   lower.inclusive = true;
   lower.lower = true;
 
   // upper.val = locus->upper == INT_MAX ? (Datum) 0 : locus->upper;
-  upper.val = locus->upper;
+  upper.val = Int32GetDatum(locus->upper);
+
   // upper.infinite = locus->upper == INT_MAX;
   upper.infinite = false;
   upper.inclusive = true;
   upper.lower = false;
 
-  PG_RETURN_RANGE_P(range_serialize(typcache, &lower, &upper, false));
+  PG_RETURN_RANGE_P(range_serialize(typcache, &lower, &upper, false, NULL));
 }
 
 // ------------------------- center ---------------------------
